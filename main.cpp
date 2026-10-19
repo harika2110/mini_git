@@ -1,11 +1,15 @@
 #include<iostream>
 #include<string> 
-#include<filesystem> 
+#include<filesystem>
+#include<iterator> 
 #include<openssl/sha.h> 
 #include<cstdio> 
 #include<fstream> 
+#include<vector> 
+#include<sstream> 
 using namespace std;
 namespace fs =  std::filesystem ;
+
 void printUsage()
 {
     cout << "Usage: mygit <command> [arguments]" << endl 
@@ -34,22 +38,23 @@ string calculateHash( string contents )
     }
     return result ; 
 }
-void hashObject( string filename ) 
+string hashObject( string filename ) 
 {
     ifstream file( filename ) ; 
     if( !file ) 
     {
         cout << "File not found" << endl; 
-        return ; 
+        return ""; 
     }
 
-    string contents = "";
-    string line ; 
+    // string contents = "";
+    // string line ; 
 
-    while( getline(file , line))
-    {
-        contents +=  line + "\n";
-    }
+    // while( getline(file , line))
+    // {
+    //     contents +=  line + "\n";
+    // }
+    string contents((istreambuf_iterator<char>(file)) , istreambuf_iterator<char>()); 
     string objectData = "blob " + to_string(contents.size()) + '\0' + contents ;
     string hash = calculateHash(objectData); 
     
@@ -62,10 +67,91 @@ void hashObject( string filename )
     objectFile.write(objectData.c_str() , objectData.size());
     objectFile.close() ; 
 
-    cout << hash << endl;
+    return hash;
 }
 
+void addFile( string filename )
+{
+    string hash = hashObject(filename ) ; 
+    if( hash == "")
+    {
+        return ; 
+    }
 
+    ifstream indexFile(".mygit/index");
+
+    vector<string> entries ; 
+    string line ; 
+    bool found = false;
+
+    while( getline(indexFile , line ))
+    {
+        istringstream input(line) ; 
+        string oldFilename, oldHash ; 
+        input >> oldFilename >> oldHash ; 
+        if( oldFilename == filename ) 
+        {
+            entries.push_back(filename + " " + hash ); 
+            found = true ;
+        }
+        else 
+        {
+            entries.push_back(line);
+        }
+    }
+    indexFile.close();
+    if( !found ) 
+    {
+        entries.push_back(filename + " " + hash ) ; 
+    }
+
+    ofstream output(".mygit/index");
+    for( string entry : entries )
+    {
+        output << entry << endl;
+    }
+    output.close() ; 
+    cout << "Added " << filename << endl;
+}
+
+void status()
+{
+    ifstream indexFile(".mygit/index");
+    
+    if( !indexFile)
+    {
+        cout << "Run init first" << endl;
+        return ; 
+    }
+
+    string line ; 
+    
+    while( getline( indexFile, line ))
+    {
+        istringstream input(line ) ; 
+        string filename , oldHash ; 
+        input >> filename >> oldHash ; 
+
+        if( !fs::exists(filename ))
+        {
+            cout << "Deleted: " << filename << endl ; 
+            continue ; 
+        }
+
+        ifstream file( filename , ios::binary ); 
+        
+        string contents((istreambuf_iterator<char>(file)), istreambuf_iterator<char>());
+        string objectData = "blob " + to_string( contents.size()) + '\0' + contents ; 
+        string currentHash = calculateHash( objectData);
+
+        if( currentHash != oldHash )
+        {
+            cout << "Modified: " << filename << endl;
+        }
+    }
+
+    indexFile.close();
+}
 void initRepository()
 {
     try
@@ -119,11 +205,17 @@ int main( int argc , char* argv[])
             return 1;
         }
 
-        hashObject(argv[2]);
+        cout << hashObject(argv[2]) << endl;
     }
     else if( command == "add")
     {
         cout << "Staging file.." << endl;
+        if( argc < 3 ) 
+        {
+            cout << "Usage: mygit add <file>" << endl;
+            return 1 ;
+        }
+        addFile( argv[2]);
     }
     else if( command == "commit")
     {
@@ -136,6 +228,7 @@ int main( int argc , char* argv[])
     else if( command == "status")
     {
         cout << "Checking repository status..." << endl;
+        status();
     }
     else if( command == "diff")
     {
