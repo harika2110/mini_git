@@ -1,6 +1,8 @@
 #include<iostream>
 #include<string> 
 #include<filesystem> 
+#include<openssl/sha.h> 
+#include<cstdio> 
 #include<fstream> 
 using namespace std;
 namespace fs =  std::filesystem ;
@@ -19,6 +21,50 @@ void printUsage()
          << " checkout <branch>    Switch branches" << endl
          << " merge <branch>       Merge a branch" << endl ;     
 }
+string calculateHash( string contents )
+{
+    unsigned char hash[SHA_DIGEST_LENGTH] ; 
+    SHA1((unsigned char*)contents.c_str() , contents.size() , hash );
+    string result = "" ; 
+    for( int i=0; i < SHA_DIGEST_LENGTH ; i++ )
+    {
+        char hex[3] ; 
+        sprintf( hex , "%02x" , hash[i]);
+        result += hex ; 
+    }
+    return result ; 
+}
+void hashObject( string filename ) 
+{
+    ifstream file( filename ) ; 
+    if( !file ) 
+    {
+        cout << "File not found" << endl; 
+        return ; 
+    }
+
+    string contents = "";
+    string line ; 
+
+    while( getline(file , line))
+    {
+        contents +=  line + "\n";
+    }
+    string objectData = "blob " + to_string(contents.size()) + '\0' + contents ;
+    string hash = calculateHash(objectData); 
+    
+    string folder = ".mygit/objects/" + hash.substr(0,2) ; 
+    filename = folder + "/" + hash.substr(2) ; 
+
+    fs::create_directories( folder ) ; 
+    ofstream objectFile(filename , ios::binary );
+
+    objectFile.write(objectData.c_str() , objectData.size());
+    objectFile.close() ; 
+
+    cout << hash << endl;
+}
+
 
 void initRepository()
 {
@@ -67,6 +113,13 @@ int main( int argc , char* argv[])
     else if ( command == "hash-object")
     {
         cout << "Hashing object..." << endl ;
+        if( argc < 3 ) 
+        {
+            cout << "Usage: mygit hash-object <file>\n" ; 
+            return 1;
+        }
+
+        hashObject(argv[2]);
     }
     else if( command == "add")
     {
