@@ -7,6 +7,7 @@
 #include<fstream> 
 #include<vector> 
 #include<sstream> 
+#include<algorithm>
 using namespace std;
 namespace fs =  std::filesystem ;
 
@@ -315,6 +316,221 @@ void showLog()
         hash = parentHash ;
     }
 }
+
+void showDiff( string filename ) 
+{
+    ifstream indexFile(".mygit/index") ;
+    
+    if( !indexFile)
+    {
+        cout << "Run init first" << endl;
+        return ;
+    }
+
+    string line ; 
+    string oldHash = "";
+    while( getline(indexFile , line))
+    {
+        istringstream input(line) ; 
+        string name, hash ; 
+        input >> name >> hash ;
+
+        if( name == filename ) 
+        {
+            oldHash = hash ; 
+            break;
+        }
+    }
+    indexFile.close();
+    if( oldHash == "")
+    {
+        cout << "File is not tracked\n";
+        return;
+    }
+    string folder = ".mygit/objects/" + oldHash.substr(0, 2);
+    string objectPath = folder + "/" + oldHash.substr(2);
+
+    ifstream objectFile(objectPath, ios::binary);
+
+    if (!objectFile)
+    {
+        cout << "Object not found\n";
+        return;
+    }
+
+    string objectData((istreambuf_iterator<char>(objectFile)),
+                      istreambuf_iterator<char>());
+
+    objectFile.close();
+
+    size_t separator = objectData.find('\0');
+
+    if (separator == string::npos)
+    {
+        cout << "Invalid object\n";
+        return;
+    }
+
+    string oldContents = objectData.substr(separator + 1);
+
+    ifstream currentFile(filename, ios::binary);
+
+    if (!currentFile)
+    {
+        cout << "File not found\n";
+        return;
+    }
+
+    string newContents((istreambuf_iterator<char>(currentFile)),
+                       istreambuf_iterator<char>());
+
+    currentFile.close();
+
+    if (oldContents == newContents)
+    {
+        cout << "No changes\n";
+        return;
+    }
+
+    istringstream oldInput(oldContents);
+    istringstream newInput(newContents);
+
+    vector<string> oldLines;
+    vector<string> newLines;
+
+    while (getline(oldInput, line))
+    {
+        oldLines.push_back(line);
+    }
+
+    while (getline(newInput, line))
+    {
+        newLines.push_back(line);
+    }
+
+    int count = max(oldLines.size(), newLines.size());
+
+    for (int i = 0; i < count; i++)
+    {
+        if (i >= oldLines.size())
+        {
+            cout << "+ " << newLines[i] << "\n";
+        }
+        else if (i >= newLines.size())
+        {
+            cout << "- " << oldLines[i] << "\n";
+        }
+        else if (oldLines[i] != newLines[i])
+        {
+            cout << "- " << oldLines[i] << "\n";
+            cout << "+ " << newLines[i] << "\n";
+        }
+    }
+}
+void checkoutCommit(string commitHash)
+{
+    string folder = ".mygit/objects/" + commitHash.substr(0, 2);
+    string path = folder + "/" + commitHash.substr(2);
+
+    ifstream commitFile(path, ios::binary);
+
+    if (!commitFile)
+    {
+        cout << "Commit not found\n";
+        return;
+    }
+
+    string commitData((istreambuf_iterator<char>(commitFile)),
+                      istreambuf_iterator<char>());
+
+    commitFile.close();
+
+    size_t separator = commitData.find('\0');
+
+    if (separator == string::npos)
+    {
+        cout << "Invalid commit object\n";
+        return;
+    }
+
+    string contents = commitData.substr(separator + 1);
+
+    istringstream input(contents);
+
+    string line;
+    vector<string> entries;
+
+    while (getline(input, line))
+    {
+        istringstream entryInput(line);
+
+        string filename, hash;
+        entryInput >> filename >> hash;
+
+        if (filename == "" || hash == "")
+        {
+            continue;
+        }
+
+        if (filename == "message" || filename == "parent")
+        {
+            continue;
+        }
+
+        string objectFolder =
+            ".mygit/objects/" + hash.substr(0, 2);
+
+        string objectPath = objectFolder + "/" + hash.substr(2);
+
+        ifstream objectFile(objectPath, ios::binary);
+
+        if (!objectFile)
+        {
+            cout << "File object not found: " << filename << "\n";
+            return;
+        }
+
+        string objectData((istreambuf_iterator<char>(objectFile)),
+                          istreambuf_iterator<char>());
+
+        objectFile.close();
+
+        size_t objectSeparator = objectData.find('\0');
+
+        if (objectSeparator == string::npos)
+        {
+            cout << "Invalid file object\n";
+            return;
+        }
+
+        string fileContents =
+            objectData.substr(objectSeparator + 1);
+
+        ofstream output(filename, ios::binary);
+
+        if (!output)
+        {
+            cout << "Could not restore: " << filename << "\n";
+            return;
+        }
+
+        output.write(fileContents.c_str(), fileContents.size());
+        output.close();
+
+        entries.push_back(filename + " " + hash);
+    }
+
+    ofstream indexFile(".mygit/index");
+
+    for (string entry : entries)
+    {
+        indexFile << entry << "\n";
+    }
+
+    indexFile.close();
+
+    cout << "Checked out commit " << commitHash << "\n";
+}
 void initRepository()
 {
     try
@@ -356,12 +572,12 @@ int main( int argc , char* argv[])
     string command = argv[1];
     if( command == "init")
     {
-        cout << "Initialising repository..." << endl ;
+       // cout << "Initialising repository..." << endl ;
         initRepository();
     }
     else if ( command == "hash-object")
     {
-        cout << "Hashing object..." << endl ;
+        //cout << "Hashing object..." << endl ;
         if( argc < 3 ) 
         {
             cout << "Usage: mygit hash-object <file>\n" ; 
@@ -372,7 +588,7 @@ int main( int argc , char* argv[])
     }
     else if( command == "add")
     {
-        cout << "Staging file.." << endl;
+        //cout << "Staging file.." << endl;
         if( argc < 3 ) 
         {
             cout << "Usage: mygit add <file>" << endl;
@@ -382,7 +598,7 @@ int main( int argc , char* argv[])
     }
     else if( command == "commit")
     {
-        cout << "Creating commit..." << endl;
+        //cout << "Creating commit..." << endl;
         if( argc < 3 ) 
         {
             cout << "Usage: mygit commit \"message\"" << endl;
@@ -392,29 +608,33 @@ int main( int argc , char* argv[])
     }
     else if( command == "log")
     {
-        cout << "Displaying history..." << endl;
+        //cout << "Displaying history..." << endl;
         showLog();
     }
     else if( command == "status")
     {
-        cout << "Checking repository status..." << endl;
+        //cout << "Checking repository status..." << endl;
         status();
     }
     else if( command == "diff")
     {
-        cout << "Calculating differences..." << endl;
-    }
-    else if( command == "branch")
-    {
-        cout << "Managing branches..." << endl ; 
+        //cout << "Calculating differences..." << endl;
+        if (argc < 3)
+        {
+            cout << "Usage: mygit diff <file>\n";
+            return 1;
+        }
+        showDiff(argv[2]);
     }
     else if( command == "checkout")
     {
-        cout << "Switching branches..." << endl;
-    }
-    else if( command == "merge")
-    {
-        cout << "Merging branches..." << endl ;
+        //cout << "Switching branches..." << endl;
+        if (argc < 3)
+        {  
+            cout << "Usage: mygit checkout <commit-hash>\n";
+            return 1;
+        }
+        checkoutCommit(argv[2]);
     }
     else 
     {
