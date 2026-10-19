@@ -152,6 +152,169 @@ void status()
 
     indexFile.close();
 }
+
+void makeCommit(string message)
+{
+    ifstream indexFile(".mygit/index") ; 
+    if( !indexFile ) 
+    {
+        cout << "Run init first" << endl ; 
+        return ; 
+    }
+
+    string line ; 
+    string commitContents = "";
+    bool empty = true ; 
+
+    while( getline(indexFile , line ))
+    {
+        if( line.empty())
+        {
+            continue ;
+        }
+
+        commitContents += line + "\n" ; 
+        empty = false;
+    }
+    indexFile.close();
+    if( empty ) 
+    {
+        cout << "Nothing to commit" << endl ;
+        return ; 
+    }
+
+    ifstream headFile(".mygit/HEAD");
+
+    string head ;
+    getline( headFile , head ) ; 
+    headFile.close();
+
+    if( head.substr(0,5) != "ref: ")
+    {
+        cout << "Invalid HEAD" << endl;
+        return ; 
+    }
+    
+    string branchPath = ".mygit/" + head.substr(5) ; 
+    string parentHash = "" ;
+    ifstream branchFile(branchPath);
+    if( branchFile)
+    {
+        getline( branchFile, parentHash ); 
+        branchFile.close();
+    }
+
+    string finalContents = "message " + message + "\n" ; 
+
+    if( parentHash != "")
+    {
+        finalContents += "parent " + parentHash + "\n" ;
+    }
+
+    finalContents += commitContents ; 
+
+    string objectData = "commit " + to_string(finalContents.size()) + '\0' + finalContents ;
+    string hash = calculateHash( objectData) ; 
+
+    string folder = ".mygit/objects/" + hash.substr(0,2); 
+    string filename = folder + "/" + hash.substr(2) ; 
+
+    fs::create_directories(folder) ; 
+
+    ofstream objectFile(filename, ios::binary );
+
+    objectFile.write( objectData.c_str(),objectData.size());
+    objectFile.close();
+
+    ofstream branchOutput(branchPath);
+    branchOutput << hash << endl ; 
+    branchOutput.close();
+
+    cout << "[" << head.substr(5) << " " << hash.substr(0,7) 
+         << "] " << message << endl;
+
+}
+
+void showLog()
+{
+    ifstream headFile(".mygit/HEAD") ; 
+
+    if( !headFile)
+    {
+        cout << "Run init first" << endl;
+        return ; 
+    }
+
+    string head ; 
+    getline( headFile , head) ; 
+    headFile.close();
+
+    if( head.substr(0,5) != "ref: ")
+    {
+        cout << "Invalid HEAD"<< endl; 
+        return ; 
+    }
+
+    string branchPath = ".mygit/" + head.substr(5);
+    ifstream branchFile( branchPath);
+    
+    if( !branchFile)
+    {
+        cout << "No commits yet" << endl; 
+        return ; 
+    }
+
+    string hash ; 
+    getline ( branchFile , hash ) ;
+    branchFile.close();
+
+    while( hash != "")
+    {
+        string folder = ".mygit/objects/" + hash.substr(0,2);
+        string filename = folder + "/" + hash.substr(2) ;
+        
+        ifstream objectFile( filename , ios::binary);
+
+        if( !objectFile )
+        {
+            cout << "Commit object not found" << endl;
+            return ;
+        }
+
+        string objectData((istreambuf_iterator<char>(objectFile)) , istreambuf_iterator<char>());
+        objectFile.close();
+
+        size_t separator = objectData.find('\0');
+
+        if( separator == string::npos )
+        {
+            cout << "Invalid commit object" << endl;
+            return ;   
+        }
+
+        string contents = objectData.substr(separator + 1 );
+
+        istringstream input(contents);
+        string line , message , parentHash = "";
+        while( getline(input , line))
+        {
+            if( line.substr(0,8) == "message ")
+            {
+                message = line.substr(8) ;
+            }
+            else if( line.substr(0,7) == "parent")
+            {
+                parentHash = line.substr(7);
+            }
+        }
+
+        cout << "Commit: " << hash << endl;
+        cout << "Message: " << message << endl;
+        cout << "-------------------------" << endl;
+
+        hash = parentHash ;
+    }
+}
 void initRepository()
 {
     try
@@ -220,10 +383,17 @@ int main( int argc , char* argv[])
     else if( command == "commit")
     {
         cout << "Creating commit..." << endl;
+        if( argc < 3 ) 
+        {
+            cout << "Usage: mygit commit \"message\"" << endl;
+            return 1 ; 
+        }
+        makeCommit( argv[2]);
     }
     else if( command == "log")
     {
         cout << "Displaying history..." << endl;
+        showLog();
     }
     else if( command == "status")
     {
