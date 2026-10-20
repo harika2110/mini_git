@@ -22,9 +22,9 @@ void printUsage()
          << " log                  Show commit history" << endl 
          << " status               Show repository status" << endl 
          << " diff                 Show file differences" << endl
-         << " branch [name]        List or create branches" << endl 
-         << " checkout <branch>    Switch branches" << endl
-         << " merge <branch>       Merge a branch" << endl ;     
+       //<< " branch [name]        List or create branches" << endl 
+         << " checkout <branch>    Switch branches" << endl ;
+       //<< " merge <branch>       Merge a branch" << endl ;     
 }
 string calculateHash( string contents )
 {
