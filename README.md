@@ -152,17 +152,17 @@ Replace `<full-commit-hash>` with a commit hash shown by `log`.
 Assuming the executable is at `../mygit/mygit` relative to your test repository:
 
 ```bash
-../mygit/mygit init
+../mini_git/mygit init
 echo "Hello from MyGit" > hello.txt
-../mygit/mygit add hello.txt
-../mygit/mygit commit "Initial snapshot"
-../mygit/mygit log
+../mini_git/mygit add hello.txt
+../mini_git/mygit commit "Initial snapshot"
+../mini_git/mygit log
 echo "A later version" > hello.txt
-../mygit/mygit status
-../mygit/mygit diff hello.txt
+../mini_git/mygit status
+../mini_git/mygit diff hello.txt
 ```
 
-Use the path to your built `mygit` executable in place of `../mygit/mygit` if your directories differ.
+Use the path to your built `mygit` executable in place of `../mini_git/mygit` if your directories differ.
 
 ## Current Limitations
 
